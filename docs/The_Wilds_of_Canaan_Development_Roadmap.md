@@ -394,6 +394,10 @@ For players who master the base game:
 
 ## 6. Milestone Checkpoints
 
+**For concrete, personally-runnable verification steps, see
+`The_Wilds_of_Canaan_Playable_Milestones.md`.** It defines M1-M8 with exact
+commands and done/not-done criteria; the table below is the schedule view.
+
 | Week | Demo Question | Pass Criteria |
 |------|--------------|---------------|
 | 2 | "Can you walk around a map?" | Procedural generation, day/night, basic rendering |
