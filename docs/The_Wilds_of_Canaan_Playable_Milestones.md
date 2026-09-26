@@ -56,37 +56,49 @@ python client/terminal_client.py --seed 7f3a9c --ticks 60
 
 ---
 
-## M2 ⬜ — Play in a Browser
+## M2 ✅ — Play in a Browser
 
 **What's new:** The game runs in a web browser (roadmap Phase 2). A vanilla
 JS Canvas client consumes the same protocol; keyboard input moves the
 player; the URL carries the seed so two people see the same world.
-*(Stack decision lives here: port the engine to a TS Web Worker per
-Architecture §9.3, or serve the Python engine over WebSocket per §5.
-Either is acceptable — the protocol and this milestone's checks are the
-same. Choose the smallest thing that works.)*
+**Stack decision:** the existing Python engine is served as-is by a
+stdlib-only server (`http.server`): SSE streams protocol lines out, POSTs
+send `INPUT` keys in. No TypeScript, no dependencies. All clients on the
+same seed share one world (the architecture doc's spectator model).
 
 **How to check:**
 
 ```bash
-# 1. Tests still pass
-PYTHONPATH=engine python -m unittest discover -s tests   # (or npm test if ported)
+# 1. Tests still pass (28: engine + server)
+PYTHONPATH=engine:. python -m unittest discover -s tests
 
 # 2. Serve the prototype
-python -m http.server 8000        # or the documented serve command
+PYTHONPATH=engine python server/canaan_server.py --port 8000
 # EXPECT: open http://localhost:8000/?seed=7f3a9c in a browser
 
 # 3. In the browser:
 #    - The same world as M1's terminal render appears as ASCII on canvas
 #      (coast at the bottom, pines above, water at the top).
-#    - Arrow keys / hjkl move the @; trees block nothing but water does.
+#    - Arrow keys / wasd / hjkl move the @; g gathers, c consecrates.
 #    - Sidebar shows Faith/Warmth/Hunger/Corrupt/Blight/Day/Wood.
-#    - Resize the window: the viewport adapts, no crash.
-#    - Open ?seed=7f3a9c in a second browser: identical map layout.
+#    - Resize the window: the viewport rescales, no crash.
+#    - Open ?seed=7f3a9c in a second browser: identical shared world —
+#      moves made in one window appear in the other.
+
+# Headless equivalents (no browser needed):
+curl -s http://localhost:8000/ | grep "Wilds of Canaan"
+curl -s --max-time 3 "http://localhost:8000/stream?seed=7f3a9c"   # SSE frames
+curl -s --max-time 3 "http://localhost:8000/stream?seed=7f3a9c"   # identical
+curl -s -X POST "http://localhost:8000/input?seed=7f3a9c&key=right"
+curl -s --max-time 3 "http://localhost:8000/stream?seed=7f3a9c" | \
+  grep -m1 "creature player"   # EXPECT: player x increased by 1
 ```
 
 **Done when:** you can share `?seed=7f3a9c` with a second browser window
 and both show the identical world; movement works with visible feedback.
+Verified 2026-09-26: 28 tests pass; two SSE streams on the same seed emit
+identical frames; POST input moves the player one tile; Faith drops on
+consecration.
 
 ---
 
@@ -258,9 +270,9 @@ why, and at least one asks for "one more run." That is the 12-week goal.
 
 - Milestones M2-M8 assume the same CLI/protocol conventions established in
   M1 (`--seed`, `--headless`, stdin `INPUT` commands, `DRAW/STATUS/MSG/FLUSH`
-  frames). If the browser pivot (M2) ports the engine to TypeScript, the
-  `python tools/simulate.py` checks become the equivalent TS test/sim
-  harness — the *observations* stay identical.
+  frames). M2 settled the stack: the Python engine is served directly
+  (`server/canaan_server.py`, SSE + POST); no TypeScript port happened, and
+  the `tools/simulate.py` harness builds on the existing stdin protocol.
 - `tools/simulate.py` does not exist yet; it is a thin scripted-driver over
   the existing stdin protocol (feed a recorded input script, assert on
   protocol output). Build it as part of M3 and reuse it thereafter.

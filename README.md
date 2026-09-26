@@ -13,6 +13,8 @@ Phase 1, weeks 1-2).
   - `sim.py` — tick loop, player entity, protocol frames, CLI entry point
   - `protocol.py` — protocol emitter + input parser
 - `client/terminal_client.py` — ANSI terminal client that renders the protocol
+- `server/canaan_server.py` + `server/static/` — stdlib web server (SSE
+  protocol stream, POST input) and vanilla-JS canvas browser client
 - `tests/` — unittest suite
 
 ## Protocol
@@ -47,6 +49,15 @@ direction) from Day 40.
 
 ## Run
 
+Browser client (M2 — stdlib server, SSE protocol stream, POST input):
+
+```bash
+PYTHONPATH=engine python server/canaan_server.py --port 8000
+# open http://localhost:8000/?seed=7f3a9c
+# move: arrows / wasd / hjkl;  g = gather;  c = consecrate
+# every client connected with the same seed shares one world
+```
+
 Headless protocol dump:
 
 ```bash
@@ -68,5 +79,5 @@ printf 'INPUT up\nINPUT left\nQUIT\n' | PYTHONPATH=engine python -m canaan --hea
 ## Test
 
 ```bash
-PYTHONPATH=engine python -m unittest discover -s tests -v
+PYTHONPATH=engine:. python -m unittest discover -s tests -v
 ```
