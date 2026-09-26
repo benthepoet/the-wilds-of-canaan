@@ -71,6 +71,11 @@ master (deployable)
 - Thursday: Review and merge to `develop`.
 - Friday: If `develop` is stable, open PR to `master`.
 
+**Milestone rhythm (supersedes weekly for milestone work):**
+- Every playable milestone (see `The_Wilds_of_Canaan_Playable_Milestones.md`) lands via its own PR to `develop`: branch `feature/mN-<name>` from `develop`, open the PR when the milestone's checks pass, review against the milestone doc, squash-merge.
+- Small fixes between milestones (UI tweaks, bug fixes) may still commit directly to `develop`.
+- PRs to `master` remain release-only (`release/*` branches).
+
 ---
 
 ## 3. The PR Process
