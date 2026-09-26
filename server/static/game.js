@@ -30,7 +30,28 @@ const GLYPHS = {
 const CELL_W = 9, CELL_H = 13;
 const FONT_STACK = 'ui-monospace, Menlo, Consolas, "Liberation Mono", monospace';
 
-// Pure camera math (also exercised by tests/camera_check.js via node):
+// Animated tiles (ASCII Visual Design §2.5, §9.5 Animation Budget).
+// Priority 1: blight fog "breathes" (" <-> = every 2.5s).
+// Priority 2: open water (~ -> w -> ~ every 1.5s). Ice stays static.
+// Everything else is static. Animation is purely presentational: it
+// derives from tile type/state already in DRAW lines and never touches
+// the engine stream.
+const ANIM = {
+    "water:open":        { frames: ["~", "w", "~"], period: 1500 },
+    "forest:blighted":   { frames: ["\"", "="], period: 2500 },
+    "forest:corrupted":  { frames: ["\"", "="], period: 2500 },
+};
+
+// Pure frame-cycling (exercised by tests/test_client_js.py via node):
+// pick the animation frame for a tile key at time `now` (ms). Tiles with
+// no animation entry always return their base char.
+function animChar(key, char, now) {
+    const a = ANIM[key];
+    if (!a) return char;
+    return a.frames[Math.floor(now / a.period) % a.frames.length];
+}
+
+// Pure camera math (exercised by tests/test_client_js.py via node):
 // center the view on the player, clamped so the view never leaves the map.
 // If the map is smaller than the view on an axis, the camera pins to 0.
 function cameraOrigin(px, py, viewW, viewH, worldW, worldH) {
@@ -71,6 +92,7 @@ function render() {
     ctx.textBaseline = "top";
     const [camX, camY] = cameraOrigin(playerX, playerY, viewW, viewH,
                                       worldW, worldH);
+    const now = performance.now();
     for (const [key, cell] of world) {
         const [x, y] = key.split(",").map(Number);
         const sx = x - camX, sy = y - camY;
@@ -80,7 +102,8 @@ function render() {
             ctx.fillRect(sx * CELL_W, sy * CELL_H, CELL_W, CELL_H);
         }
         ctx.fillStyle = COLORS[cell.fg] || "#fff";
-        ctx.fillText(cell.char, sx * CELL_W, sy * CELL_H);
+        ctx.fillText(animChar(cell.k, cell.char, now),
+                     sx * CELL_W, sy * CELL_H);
     }
 }
 
@@ -93,8 +116,8 @@ function handleLine(line) {
         pending = new Map();
     } else if (cmd === "DRAW") {
         const [_, x, y, tile, state, fg, bg] = parts;
-        const char = GLYPHS[tile + ":" + state] || "?";
-        pending.set(x + "," + y, { char, fg, bg });
+        const k = tile + ":" + state;
+        pending.set(x + "," + y, { char: GLYPHS[k] || "?", k, fg, bg });
         worldW = Math.max(worldW, Number(x) + 1);
         worldH = Math.max(worldH, Number(y) + 1);
         if (tile === "creature" && state === "player") {
@@ -133,3 +156,7 @@ document.addEventListener("keydown", (e) => {
 });
 
 resize();
+
+// Animation timer: re-render the visible window at ~7fps so water and
+// blight fog cycle even when no new frame arrives from the engine.
+setInterval(render, 150);

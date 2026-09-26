@@ -42,6 +42,24 @@ GLYPHS = {
     ("creature", "wendigo"): "W",
 }
 
+# Animations (ASCII Visual Design §2.5, §9.5): open water cycles
+# ~ -> w -> ~ every 1.5s; blighted forest breathes " <-> = every 2.5s.
+# Purely presentational. (frames, period_ms)
+ANIM = {
+    ("water", "open"): (["~", "w", "~"], 1500),
+    ("forest", "blighted"): (['"', "="], 2500),
+    ("forest", "corrupted"): (['"', "="], 2500),
+}
+
+
+def anim_char(key: tuple[str, str], char: str, now_ms: float) -> str:
+    """Animation frame for a tile at time now_ms; static tiles unchanged."""
+    entry = ANIM.get(key)
+    if entry is None:
+        return char
+    frames, period = entry
+    return frames[int(now_ms // period) % len(frames)]
+
 
 def fg(code: int) -> str:
     return f"\x1b[38;5;{code}m"
@@ -105,7 +123,9 @@ class TerminalClient:
                     continue
                 tile, state, colors = cell
                 fg_name, bg_name = colors.split(" ")
-                char = GLYPHS.get((tile, state), "?")
+                char = anim_char((tile, state),
+                                 GLYPHS.get((tile, state), "?"),
+                                 time.monotonic() * 1000)
                 row.append(
                     fg(ANSI_COLORS.get(fg_name, 15))
                     + bg(ANSI_COLORS.get(bg_name, 0))
@@ -135,7 +155,13 @@ def run(seed: str, ticks: int, fps_delay: float) -> None:
         for line in engine.stdout:
             client.handle_line(line)
             if line.startswith("FLUSH"):
-                time.sleep(fps_delay)
+                # Re-render during the inter-tick delay so water and
+                # blight animations cycle between engine frames.
+                deadline = time.monotonic() + fps_delay
+                while time.monotonic() < deadline:
+                    client.render()
+                    time.sleep(min(0.15, max(0.0,
+                                   deadline - time.monotonic())))
     finally:
         engine.wait()
         sys.stdout.write(RESET + "\n")
