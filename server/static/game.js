@@ -25,6 +25,22 @@ const GLYPHS = {
     "creature:player": "@", "creature:wolf": "w", "creature:wendigo": "W",
 };
 
+// Compact fixed cell size; the camera scrolls over the world rather than
+// scaling cells to fill the window.
+const CELL_W = 9, CELL_H = 13;
+const FONT_STACK = 'ui-monospace, Menlo, Consolas, "Liberation Mono", monospace';
+
+// Pure camera math (also exercised by tests/camera_check.js via node):
+// center the view on the player, clamped so the view never leaves the map.
+// If the map is smaller than the view on an axis, the camera pins to 0.
+function cameraOrigin(px, py, viewW, viewH, worldW, worldH) {
+    const cx = Math.max(0, Math.min(px - Math.floor(viewW / 2),
+                                    worldW - viewW));
+    const cy = Math.max(0, Math.min(py - Math.floor(viewH / 2),
+                                    worldH - viewH));
+    return [cx, cy];
+}
+
 const SEED = new URLSearchParams(location.search).get("seed") || "random";
 document.getElementById("seed").textContent = SEED;
 
@@ -35,32 +51,36 @@ const ctx = canvas.getContext("2d");
 let pending = new Map();
 let world = new Map();
 let worldW = 60, worldH = 40;
+let playerX = 0, playerY = 0;
 
-// Viewport adapts to the window: cell size is recomputed on resize so the
-// whole map always fits. (Resize-safety check for M2.)
-let cellW = 12, cellH = 16;
+// Viewport size in cells follows the canvas pixel size; cells stay fixed.
+let viewW = 40, viewH = 25;
 function resize() {
-    canvas.width = canvas.clientWidth || window.innerWidth - 220;
-    canvas.height = window.innerHeight;
-    cellW = Math.max(4, Math.floor(canvas.width / worldW));
-    cellH = Math.max(6, Math.floor(canvas.height / worldH));
+    canvas.width = canvas.clientWidth;
+    canvas.height = canvas.clientHeight;
+    viewW = Math.max(1, Math.floor(canvas.width / CELL_W));
+    viewH = Math.max(1, Math.floor(canvas.height / CELL_H));
     render();
 }
 window.addEventListener("resize", resize);
 
 function render() {
-    ctx.fillStyle = "#000";
+    ctx.fillStyle = "#0a0a0a";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.font = cellH + "px monospace";
+    ctx.font = CELL_H + "px " + FONT_STACK;
     ctx.textBaseline = "top";
+    const [camX, camY] = cameraOrigin(playerX, playerY, viewW, viewH,
+                                      worldW, worldH);
     for (const [key, cell] of world) {
         const [x, y] = key.split(",").map(Number);
+        const sx = x - camX, sy = y - camY;
+        if (sx < 0 || sy < 0 || sx >= viewW || sy >= viewH) continue;
         if (cell.bg !== "black") {
             ctx.fillStyle = COLORS[cell.bg] || "#000";
-            ctx.fillRect(x * cellW, y * cellH, cellW, cellH);
+            ctx.fillRect(sx * CELL_W, sy * CELL_H, CELL_W, CELL_H);
         }
         ctx.fillStyle = COLORS[cell.fg] || "#fff";
-        ctx.fillText(cell.char, x * cellW, y * cellH);
+        ctx.fillText(cell.char, sx * CELL_W, sy * CELL_H);
     }
 }
 
@@ -77,6 +97,10 @@ function handleLine(line) {
         pending.set(x + "," + y, { char, fg, bg });
         worldW = Math.max(worldW, Number(x) + 1);
         worldH = Math.max(worldH, Number(y) + 1);
+        if (tile === "creature" && state === "player") {
+            playerX = Number(x);
+            playerY = Number(y);
+        }
     } else if (cmd === "STATUS") {
         document.getElementById("stats").innerHTML =
             parts.slice(1).map(p => p.replace(":", ": ")).join("<br>");
